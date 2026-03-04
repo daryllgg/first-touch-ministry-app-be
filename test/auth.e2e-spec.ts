@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { DataSource } from 'typeorm';
 
 describe('AuthController (e2e)', () => {
   let app: INestApplication;
@@ -14,6 +15,10 @@ describe('AuthController (e2e)', () => {
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
     await app.init();
+
+    // Clean up test data
+    const dataSource = app.get(DataSource);
+    await dataSource.query('TRUNCATE TABLE users CASCADE');
   });
 
   afterAll(async () => {
