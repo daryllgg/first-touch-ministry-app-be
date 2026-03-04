@@ -38,7 +38,8 @@ export class AnnouncementsService {
   async update(id: string, dto: UpdateAnnouncementDto): Promise<Announcement> {
     const announcement = await this.findOne(id);
     Object.assign(announcement, dto);
-    return this.announcementsRepo.save(announcement);
+    await this.announcementsRepo.save(announcement);
+    return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {

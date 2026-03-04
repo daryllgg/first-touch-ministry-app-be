@@ -38,7 +38,7 @@ describe('UsersController (e2e)', () => {
       firstName: 'Admin',
       lastName: 'User',
       isApproved: true,
-      roles: [adminRole],
+      roles: [adminRole!],
     });
     await userRepo.save(admin);
 
