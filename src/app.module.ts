@@ -5,6 +5,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { PrayerRequestsModule } from './prayer-requests/prayer-requests.module';
+import { WorshipSchedulesModule } from './worship-schedules/worship-schedules.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PrayerRequestsModule } from './prayer-requests/prayer-requests.module';
     AuthModule,
     AnnouncementsModule,
     PrayerRequestsModule,
+    WorshipSchedulesModule,
   ],
 })
 export class AppModule {}
