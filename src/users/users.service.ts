@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
@@ -40,13 +40,19 @@ export class UsersService {
       relations: ['roles'],
     });
     const role = await this.rolesRepo.findOne({ where: { name: roleName } });
-    if (!user || !role) throw new Error('User or role not found');
-    user.roles.push(role);
+    if (!user) throw new NotFoundException(`User with id ${userId} not found`);
+    if (!role) throw new NotFoundException(`Role ${roleName} not found`);
+
+    const alreadyHasRole = user.roles.some(r => r.id === role.id);
+    if (!alreadyHasRole) {
+      user.roles.push(role);
+    }
     return this.usersRepo.save(user);
   }
 
   async approveUser(userId: string): Promise<User> {
-    const user = await this.usersRepo.findOneOrFail({ where: { id: userId } });
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User with id ${userId} not found`);
     user.isApproved = true;
     return this.usersRepo.save(user);
   }

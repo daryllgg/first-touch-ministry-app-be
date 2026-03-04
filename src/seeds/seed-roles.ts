@@ -13,7 +13,7 @@ const dataSource = new DataSource({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   entities: [Role],
-  synchronize: true,
+  synchronize: false,
 });
 
 async function seed() {
