@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DataSource } from 'typeorm';
@@ -14,6 +15,7 @@ describe('AuthController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+    app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
     await app.init();
 
     // Clean up test data
@@ -112,6 +114,38 @@ describe('AuthController (e2e)', () => {
       return request(app.getHttpServer())
         .post('/auth/login')
         .send({ email: 'noone@church.com', password: 'Password123!' })
+        .expect(401);
+    });
+  });
+
+  describe('GET /auth/me', () => {
+    it('should return current user with valid token', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          email: 'me-test@church.com',
+          password: 'Password123!',
+          firstName: 'Me',
+          lastName: 'Test',
+        });
+
+      const loginRes = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'me-test@church.com', password: 'Password123!' });
+
+      return request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${loginRes.body.accessToken}`)
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.email).toBe('me-test@church.com');
+          expect(res.body).not.toHaveProperty('passwordHash');
+        });
+    });
+
+    it('should reject without token', () => {
+      return request(app.getHttpServer())
+        .get('/auth/me')
         .expect(401);
     });
   });
