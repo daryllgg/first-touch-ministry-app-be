@@ -14,14 +14,20 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const user = await this.usersService.create({
-      email: dto.email,
-      passwordHash,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-    });
-
-    const { passwordHash: _, ...result } = user;
-    return result;
+    try {
+      const user = await this.usersService.create({
+        email: dto.email,
+        passwordHash,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+      });
+      const { passwordHash: _, ...result } = user;
+      return result;
+    } catch (error) {
+      if (error.code === '23505') {
+        throw new ConflictException('Email already registered');
+      }
+      throw error;
+    }
   }
 }

@@ -1,7 +1,9 @@
 import { IsEmail, IsString, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class RegisterDto {
   @IsEmail()
+  @Transform(({ value }) => value.toLowerCase().trim())
   email: string;
 
   @IsString()
