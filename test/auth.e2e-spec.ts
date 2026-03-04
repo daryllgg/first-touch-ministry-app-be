@@ -76,4 +76,43 @@ describe('AuthController (e2e)', () => {
         .expect(400);
     });
   });
+
+  describe('POST /auth/login', () => {
+    beforeAll(async () => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          email: 'login-test@church.com',
+          password: 'Password123!',
+          firstName: 'Login',
+          lastName: 'Test',
+        });
+    });
+
+    it('should return JWT token on valid credentials', () => {
+      return request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'login-test@church.com', password: 'Password123!' })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.accessToken).toBeDefined();
+          expect(res.body.user.email).toBe('login-test@church.com');
+          expect(res.body.user).not.toHaveProperty('passwordHash');
+        });
+    });
+
+    it('should reject invalid password', () => {
+      return request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'login-test@church.com', password: 'WrongPassword!' })
+        .expect(401);
+    });
+
+    it('should reject non-existent email', () => {
+      return request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'noone@church.com', password: 'Password123!' })
+        .expect(401);
+    });
+  });
 });
