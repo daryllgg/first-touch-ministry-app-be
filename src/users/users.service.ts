@@ -1,11 +1,13 @@
 import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { Role } from './entities/role.entity';
 import { RoleName } from './entities/role.enum';
 import { Gender } from './entities/gender.enum';
 import { ProfileChangeRequest } from './entities/profile-change-request.entity';
+import { CreateUserDto } from './dto/create-user.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification-type.enum';
 
@@ -211,5 +213,41 @@ export class UsersService {
 
     user.profilePicture = file.path;
     return this.usersRepo.save(user);
+  }
+
+  async createUserByAdmin(dto: CreateUserDto): Promise<User> {
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const user = this.usersRepo.create({
+      email: dto.email,
+      passwordHash,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      contactNumber: dto.contactNumber,
+      isApproved: true,
+    });
+    const saved = await this.usersRepo.save(user);
+
+    if (dto.roles?.length) {
+      const userWithRoles = await this.usersRepo.findOne({
+        where: { id: saved.id },
+        relations: ['roles'],
+      });
+      for (const roleName of dto.roles) {
+        const role = await this.rolesRepo.findOne({ where: { name: roleName as RoleName } });
+        if (role) {
+          userWithRoles.roles.push(role);
+        }
+      }
+      await this.usersRepo.save(userWithRoles);
+      return userWithRoles;
+    }
+
+    return saved;
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User with id ${userId} not found`);
+    await this.usersRepo.remove(user);
   }
 }
