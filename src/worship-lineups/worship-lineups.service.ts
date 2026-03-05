@@ -57,6 +57,7 @@ export class WorshipLineupsService {
         lineup: savedLineup,
         user,
         instrumentRole,
+        customRoleName: memberDto.customRoleName,
       });
       await this.membersRepo.save(member);
     }
