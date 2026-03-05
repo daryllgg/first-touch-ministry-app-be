@@ -106,20 +106,24 @@ export class WorshipLineupsService implements OnModuleInit {
       }
     }
 
-    // Notify team heads and admins about new lineup submission
+    // Notify team heads, admins, and lineup members about new lineup submission
     if (this.notificationsService) {
       try {
         const allUsers = await this.usersService.findAll();
-        const targetIds = allUsers
+        const approverIds = allUsers
           .filter((u) =>
             u.roles?.some((r) =>
               [RoleName.WORSHIP_TEAM_HEAD, RoleName.ADMIN, RoleName.SUPER_ADMIN].includes(r.name as RoleName),
             ) && u.id !== submittedBy.id,
           )
           .map((u) => u.id);
-        if (targetIds.length > 0) {
+
+        const memberIds = await this.getLineupMemberUserIds(savedLineup.id, submittedBy.id);
+
+        const allTargetIds = [...new Set([...approverIds, ...memberIds])];
+        if (allTargetIds.length > 0) {
           await this.notificationsService.createForMultipleUsers(
-            targetIds,
+            allTargetIds,
             NotificationType.LINEUP_SUBMITTED,
             'New Lineup Submitted',
             `${submittedBy.firstName} submitted a new worship lineup`,
@@ -133,6 +137,16 @@ export class WorshipLineupsService implements OnModuleInit {
     }
 
     return this.findOne(savedLineup.id);
+  }
+
+  private async getLineupMemberUserIds(lineupId: string, excludeUserId?: string): Promise<string[]> {
+    const members = await this.membersRepo.find({
+      where: { lineup: { id: lineupId } },
+      relations: ['user'],
+    });
+    return members
+      .map((m) => m.user.id)
+      .filter((id) => id !== excludeUserId);
   }
 
   async findAll(): Promise<WorshipLineup[]> {
@@ -159,21 +173,28 @@ export class WorshipLineupsService implements OnModuleInit {
     });
     await this.reviewsRepo.save(review);
 
-    // Notify submitter about lineup status change
-    if (this.notificationsService && lineup.submittedBy) {
+    // Notify submitter and all lineup members about status change
+    if (this.notificationsService) {
       try {
         const notifType = status === LineupStatus.APPROVED
           ? NotificationType.LINEUP_APPROVED
           : NotificationType.LINEUP_REJECTED;
         const statusLabel = status === LineupStatus.APPROVED ? 'approved' : 'rejected';
-        await this.notificationsService.createForUser(
-          lineup.submittedBy.id,
-          notifType,
-          `Lineup ${statusLabel}`,
-          `Your worship lineup has been ${statusLabel} by ${reviewedBy.firstName}`,
-          lineup.id,
-          'worship-lineup',
-        );
+        const memberIds = await this.getLineupMemberUserIds(id, reviewedBy.id);
+        const allTargetIds = [...new Set([
+          ...(lineup.submittedBy?.id !== reviewedBy.id ? [lineup.submittedBy.id] : []),
+          ...memberIds,
+        ])];
+        if (allTargetIds.length > 0) {
+          await this.notificationsService.createForMultipleUsers(
+            allTargetIds,
+            notifType,
+            `Lineup ${statusLabel}`,
+            `Your worship lineup has been ${statusLabel} by ${reviewedBy.firstName}`,
+            lineup.id,
+            'worship-lineup',
+          );
+        }
       } catch {
         // best-effort
       }
@@ -197,17 +218,24 @@ export class WorshipLineupsService implements OnModuleInit {
     });
     await this.reviewsRepo.save(review);
 
-    // Notify submitter about changes requested
-    if (this.notificationsService && lineup.submittedBy) {
+    // Notify submitter and all lineup members about changes requested
+    if (this.notificationsService) {
       try {
-        await this.notificationsService.createForUser(
-          lineup.submittedBy.id,
-          NotificationType.LINEUP_CHANGES_REQUESTED,
-          'Changes Requested',
-          `${reviewer.firstName} requested changes to your worship lineup`,
-          lineup.id,
-          'worship-lineup',
-        );
+        const memberIds = await this.getLineupMemberUserIds(id, reviewer.id);
+        const allTargetIds = [...new Set([
+          ...(lineup.submittedBy?.id !== reviewer.id ? [lineup.submittedBy.id] : []),
+          ...memberIds,
+        ])];
+        if (allTargetIds.length > 0) {
+          await this.notificationsService.createForMultipleUsers(
+            allTargetIds,
+            NotificationType.LINEUP_CHANGES_REQUESTED,
+            'Changes Requested',
+            `${reviewer.firstName} requested changes to your worship lineup`,
+            lineup.id,
+            'worship-lineup',
+          );
+        }
       } catch {
         // best-effort
       }
