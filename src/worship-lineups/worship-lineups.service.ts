@@ -122,11 +122,12 @@ export class WorshipLineupsService implements OnModuleInit {
 
         const allTargetIds = [...new Set([...approverIds, ...memberIds])];
         if (allTargetIds.length > 0) {
+          const dateStr = savedLineup.dates.join(', ');
           await this.notificationsService.createForMultipleUsers(
             allTargetIds,
             NotificationType.LINEUP_SUBMITTED,
-            'New Lineup Submitted',
-            `${submittedBy.firstName} submitted a new worship lineup`,
+            `Worship - ${dateStr}`,
+            'Pending for approval',
             savedLineup.id,
             'worship-lineup',
           );
@@ -186,11 +187,13 @@ export class WorshipLineupsService implements OnModuleInit {
           ...memberIds,
         ])];
         if (allTargetIds.length > 0) {
+          const dateStr = lineup.dates.join(', ');
+          const subtitle = status === LineupStatus.APPROVED ? 'Approved' : 'Declined';
           await this.notificationsService.createForMultipleUsers(
             allTargetIds,
             notifType,
-            `Lineup ${statusLabel}`,
-            `Your worship lineup has been ${statusLabel} by ${reviewedBy.firstName}`,
+            `Worship - ${dateStr}`,
+            subtitle,
             lineup.id,
             'worship-lineup',
           );
@@ -227,11 +230,12 @@ export class WorshipLineupsService implements OnModuleInit {
           ...memberIds,
         ])];
         if (allTargetIds.length > 0) {
+          const dateStr = lineup.dates.join(', ');
           await this.notificationsService.createForMultipleUsers(
             allTargetIds,
             NotificationType.LINEUP_CHANGES_REQUESTED,
-            'Changes Requested',
-            `${reviewer.firstName} requested changes to your worship lineup`,
+            `Worship - ${dateStr}`,
+            'Changes requested',
             lineup.id,
             'worship-lineup',
           );
