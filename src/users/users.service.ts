@@ -1,15 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { Role } from './entities/role.entity';
 import { RoleName } from './entities/role.enum';
+import { Gender } from './entities/gender.enum';
+import { ProfileChangeRequest } from './entities/profile-change-request.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification-type.enum';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User) private usersRepo: Repository<User>,
     @InjectRepository(Role) private rolesRepo: Repository<Role>,
+    @InjectRepository(ProfileChangeRequest) private profileChangeRepo: Repository<ProfileChangeRequest>,
+    @Optional() private notificationsService?: NotificationsService,
   ) {}
 
   async findByEmail(email: string): Promise<User | null> {
@@ -25,6 +31,10 @@ export class UsersService {
     passwordHash: string;
     firstName: string;
     lastName: string;
+    contactNumber?: string;
+    birthday?: string;
+    gender?: Gender;
+    address?: string;
   }): Promise<User> {
     const user = this.usersRepo.create(data);
     return this.usersRepo.save(user);
@@ -54,7 +64,24 @@ export class UsersService {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException(`User with id ${userId} not found`);
     user.isApproved = true;
-    return this.usersRepo.save(user);
+    const saved = await this.usersRepo.save(user);
+
+    if (this.notificationsService) {
+      try {
+        await this.notificationsService.createForUser(
+          userId,
+          NotificationType.USER_APPROVED,
+          'Account Approved',
+          'Your account has been approved. Welcome!',
+          userId,
+          'user',
+        );
+      } catch {
+        // best-effort
+      }
+    }
+
+    return saved;
   }
 
   async findPendingUsers(): Promise<User[]> {
@@ -63,5 +90,126 @@ export class UsersService {
 
   async findAll(): Promise<User[]> {
     return this.usersRepo.find();
+  }
+
+  async requestProfileUpdate(userId: string, changes: Record<string, any>): Promise<ProfileChangeRequest> {
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User with id ${userId} not found`);
+
+    const request = this.profileChangeRepo.create({
+      user,
+      requestedChanges: changes,
+      status: 'PENDING',
+    });
+    const saved = await this.profileChangeRepo.save(request);
+
+    // Notify admins about the profile change request
+    if (this.notificationsService) {
+      try {
+        const allUsers = await this.usersRepo.find({ relations: ['roles'] });
+        const adminIds = allUsers
+          .filter((u) =>
+            u.roles?.some((r) =>
+              [RoleName.ADMIN, RoleName.SUPER_ADMIN].includes(r.name as RoleName),
+            ) && u.id !== userId,
+          )
+          .map((u) => u.id);
+        if (adminIds.length > 0) {
+          await this.notificationsService.createForMultipleUsers(
+            adminIds,
+            NotificationType.PROFILE_CHANGE_REQUESTED,
+            'Profile Change Request',
+            `${user.firstName} ${user.lastName} requested a profile update`,
+            saved.id,
+            'profile-change-request',
+          );
+        }
+      } catch {
+        // best-effort
+      }
+    }
+
+    return saved;
+  }
+
+  async findPendingProfileChanges(): Promise<ProfileChangeRequest[]> {
+    return this.profileChangeRepo.find({
+      where: { status: 'PENDING' },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async approveProfileChange(requestId: string, admin: User): Promise<ProfileChangeRequest> {
+    const request = await this.profileChangeRepo.findOne({ where: { id: requestId } });
+    if (!request) throw new NotFoundException(`Profile change request with id ${requestId} not found`);
+
+    const user = await this.usersRepo.findOne({ where: { id: request.user.id } });
+    if (!user) throw new NotFoundException(`User not found`);
+
+    // Apply all requested changes to the user entity
+    const allowedFields = ['firstName', 'lastName', 'contactNumber', 'birthday', 'gender', 'address'];
+    for (const [key, value] of Object.entries(request.requestedChanges)) {
+      if (allowedFields.includes(key)) {
+        (user as any)[key] = value;
+      }
+    }
+    await this.usersRepo.save(user);
+
+    request.status = 'APPROVED';
+    request.reviewedBy = admin;
+    request.reviewedAt = new Date();
+    const saved = await this.profileChangeRepo.save(request);
+
+    if (this.notificationsService) {
+      try {
+        await this.notificationsService.createForUser(
+          request.user.id,
+          NotificationType.PROFILE_CHANGE_APPROVED,
+          'Profile Update Approved',
+          'Your profile change request has been approved',
+          request.id,
+          'profile-change-request',
+        );
+      } catch {
+        // best-effort
+      }
+    }
+
+    return saved;
+  }
+
+  async rejectProfileChange(requestId: string, admin: User): Promise<ProfileChangeRequest> {
+    const request = await this.profileChangeRepo.findOne({ where: { id: requestId } });
+    if (!request) throw new NotFoundException(`Profile change request with id ${requestId} not found`);
+
+    request.status = 'REJECTED';
+    request.reviewedBy = admin;
+    request.reviewedAt = new Date();
+    const saved = await this.profileChangeRepo.save(request);
+
+    if (this.notificationsService) {
+      try {
+        await this.notificationsService.createForUser(
+          request.user.id,
+          NotificationType.PROFILE_CHANGE_REJECTED,
+          'Profile Update Rejected',
+          'Your profile change request has been rejected',
+          request.id,
+          'profile-change-request',
+        );
+      } catch {
+        // best-effort
+      }
+    }
+
+    return saved;
+  }
+
+  async uploadProfilePicture(userId: string, file: Express.Multer.File): Promise<User> {
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User with id ${userId} not found`);
+
+    user.profilePicture = file.path;
+    return this.usersRepo.save(user);
   }
 }
