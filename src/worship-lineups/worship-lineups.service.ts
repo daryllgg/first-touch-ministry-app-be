@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, OnModuleInit, Optional, Logger } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, OnModuleInit, Optional, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorshipLineup } from './entities/worship-lineup.entity';
@@ -10,6 +10,7 @@ import { SubstitutionRequest } from './entities/substitution-request.entity';
 import { CreateWorshipLineupDto } from './dto/create-worship-lineup.dto';
 import { CreateSubstitutionRequestDto } from './dto/create-substitution-request.dto';
 import { LineupStatus } from './entities/lineup-status.enum';
+import { ServiceType } from './entities/service-type.enum';
 import { SubstitutionStatus } from './entities/substitution-status.enum';
 import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
@@ -122,11 +123,11 @@ export class WorshipLineupsService implements OnModuleInit {
 
         const allTargetIds = [...new Set([...approverIds, ...memberIds])];
         if (allTargetIds.length > 0) {
-          const dateStr = savedLineup.dates.join(', ');
+          const fullLineup = await this.findOne(savedLineup.id);
           await this.notificationsService.createForMultipleUsers(
             allTargetIds,
             NotificationType.LINEUP_SUBMITTED,
-            `Worship - ${dateStr}`,
+            this.formatNotificationTitle(fullLineup),
             'Pending for approval',
             savedLineup.id,
             'worship-lineup',
@@ -150,8 +151,45 @@ export class WorshipLineupsService implements OnModuleInit {
       .filter((id) => id !== excludeUserId);
   }
 
+  private formatServiceType(type: string): string {
+    switch (type) {
+      case ServiceType.SUNDAY_SERVICE: return 'Sunday Service';
+      case ServiceType.PLUG_IN_WORSHIP: return 'Plug In Worship';
+      case ServiceType.YOUTH_SERVICE: return 'Youth Service';
+      case ServiceType.SPECIAL_EVENT: return 'Special Event';
+      default: return type;
+    }
+  }
+
+  private formatNotificationTitle(lineup: WorshipLineup): string {
+    const serviceLabel = lineup.serviceType === ServiceType.SPECIAL_EVENT && lineup.customServiceName
+      ? lineup.customServiceName
+      : this.formatServiceType(lineup.serviceType);
+    const dateStr = lineup.dates
+      .map((d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }))
+      .join(', ');
+    return `${serviceLabel} - ${dateStr}`;
+  }
+
   async findAll(): Promise<WorshipLineup[]> {
     return this.lineupsRepo.find({ order: { createdAt: 'DESC' } });
+  }
+
+  async findForUser(userId: string): Promise<WorshipLineup[]> {
+    return this.lineupsRepo.createQueryBuilder('lineup')
+      .leftJoinAndSelect('lineup.submittedBy', 'submittedBy')
+      .leftJoinAndSelect('lineup.reviewedBy', 'reviewedBy')
+      .leftJoinAndSelect('lineup.members', 'members')
+      .leftJoinAndSelect('members.user', 'memberUser')
+      .leftJoinAndSelect('members.instrumentRole', 'instrumentRole')
+      .leftJoinAndSelect('lineup.songs', 'songs')
+      .leftJoinAndSelect('songs.singer', 'singer')
+      .leftJoinAndSelect('lineup.reviews', 'reviews')
+      .leftJoinAndSelect('reviews.reviewer', 'reviewer')
+      .where('submittedBy.id = :userId', { userId })
+      .orWhere('memberUser.id = :userId', { userId })
+      .orderBy('lineup.createdAt', 'DESC')
+      .getMany();
   }
 
   async findOne(id: string): Promise<WorshipLineup> {
@@ -160,7 +198,7 @@ export class WorshipLineupsService implements OnModuleInit {
     return lineup;
   }
 
-  async updateStatus(id: string, status: LineupStatus, reviewedBy: User): Promise<WorshipLineup> {
+  async updateStatus(id: string, status: LineupStatus, reviewedBy: User, comment?: string): Promise<WorshipLineup> {
     const lineup = await this.findOne(id);
     lineup.status = status;
     lineup.reviewedBy = reviewedBy;
@@ -171,6 +209,7 @@ export class WorshipLineupsService implements OnModuleInit {
       lineup,
       reviewer: reviewedBy,
       status,
+      comment: comment || undefined,
     });
     await this.reviewsRepo.save(review);
 
@@ -187,12 +226,11 @@ export class WorshipLineupsService implements OnModuleInit {
           ...memberIds,
         ])];
         if (allTargetIds.length > 0) {
-          const dateStr = lineup.dates.join(', ');
           const subtitle = status === LineupStatus.APPROVED ? 'Approved' : 'Declined';
           await this.notificationsService.createForMultipleUsers(
             allTargetIds,
             notifType,
-            `Worship - ${dateStr}`,
+            this.formatNotificationTitle(lineup),
             subtitle,
             lineup.id,
             'worship-lineup',
@@ -230,12 +268,235 @@ export class WorshipLineupsService implements OnModuleInit {
           ...memberIds,
         ])];
         if (allTargetIds.length > 0) {
-          const dateStr = lineup.dates.join(', ');
           await this.notificationsService.createForMultipleUsers(
             allTargetIds,
             NotificationType.LINEUP_CHANGES_REQUESTED,
-            `Worship - ${dateStr}`,
+            this.formatNotificationTitle(lineup),
             'Changes requested',
+            lineup.id,
+            'worship-lineup',
+          );
+        }
+      } catch {
+        // best-effort
+      }
+    }
+
+    return this.findOne(id);
+  }
+
+  async resubmit(id: string, user: User): Promise<WorshipLineup> {
+    const lineup = await this.findOne(id);
+    if (lineup.submittedBy.id !== user.id) {
+      throw new ForbiddenException('Only the submitter can resubmit');
+    }
+    lineup.status = LineupStatus.PENDING;
+    lineup.reviewedBy = null as any;
+    lineup.reviewedAt = null as any;
+    await this.lineupsRepo.save(lineup);
+
+    const review = this.reviewsRepo.create({
+      lineup,
+      reviewer: user,
+      status: LineupStatus.PENDING,
+      comment: 'Resubmitted',
+    });
+    await this.reviewsRepo.save(review);
+
+    // Notify approvers and members
+    if (this.notificationsService) {
+      try {
+        const allUsers = await this.usersService.findAll();
+        const approverIds = allUsers
+          .filter((u) =>
+            u.roles?.some((r) =>
+              [RoleName.WORSHIP_TEAM_HEAD, RoleName.ADMIN, RoleName.SUPER_ADMIN].includes(r.name as RoleName),
+            ) && u.id !== user.id,
+          )
+          .map((u) => u.id);
+        const memberIds = await this.getLineupMemberUserIds(id, user.id);
+        const allTargetIds = [...new Set([...approverIds, ...memberIds])];
+        if (allTargetIds.length > 0) {
+          await this.notificationsService.createForMultipleUsers(
+            allTargetIds,
+            NotificationType.LINEUP_SUBMITTED,
+            this.formatNotificationTitle(lineup),
+            'Resubmitted for approval',
+            lineup.id,
+            'worship-lineup',
+          );
+        }
+      } catch {
+        // best-effort
+      }
+    }
+
+    return this.findOne(id);
+  }
+
+  async update(id: string, dto: CreateWorshipLineupDto, user: User): Promise<WorshipLineup> {
+    const lineup = await this.findOne(id);
+    if (lineup.submittedBy.id !== user.id) {
+      throw new ForbiddenException('Only the submitter can edit');
+    }
+
+    // Capture old state before changes (for diff + notifications)
+    const oldMemberUserIds = await this.getLineupMemberUserIds(id);
+    const oldMembers = await this.membersRepo.find({
+      where: { lineup: { id } },
+      relations: ['user', 'instrumentRole'],
+    });
+    const oldDates = [...lineup.dates];
+    const oldServiceType = lineup.serviceType;
+    const oldCustomServiceName = lineup.customServiceName;
+    const oldNotes = lineup.notes;
+    const oldSongs = lineup.songs?.map((s) => ({ title: s.title, link: s.link || null, singerName: s.singer ? `${s.singer.firstName} ${s.singer.lastName}` : null })) || [];
+
+    lineup.dates = dto.dates;
+    lineup.serviceType = dto.serviceType;
+    lineup.customServiceName = dto.customServiceName || (null as any);
+    lineup.notes = dto.notes || (null as any);
+    lineup.status = LineupStatus.PENDING;
+    lineup.reviewedBy = null as any;
+    lineup.reviewedAt = null as any;
+    await this.lineupsRepo.save(lineup);
+
+    // Remove old members and songs
+    await this.membersRepo.delete({ lineup: { id } });
+    await this.songsRepo.delete({ lineup: { id } });
+
+    // Re-create members
+    for (const memberDto of dto.members) {
+      const memberUser = await this.usersService.findById(memberDto.userId);
+      if (!memberUser) throw new NotFoundException(`User ${memberDto.userId} not found`);
+      const instrumentRole = await this.instrumentRolesRepo.findOne({ where: { id: memberDto.instrumentRoleId } });
+      if (!instrumentRole) throw new NotFoundException(`Instrument role ${memberDto.instrumentRoleId} not found`);
+      const member = this.membersRepo.create({ lineup, user: memberUser, instrumentRole, customRoleName: memberDto.customRoleName });
+      await this.membersRepo.save(member);
+    }
+
+    // Re-create songs
+    if (dto.songs && dto.songs.length > 0) {
+      for (let i = 0; i < dto.songs.length; i++) {
+        const songDto = dto.songs[i];
+        let singer: User | null = null;
+        if (songDto.singerId) {
+          singer = await this.usersService.findById(songDto.singerId);
+        }
+        const song = this.songsRepo.create({
+          lineup,
+          title: songDto.title,
+          link: songDto.link,
+          singer: singer || undefined,
+          orderIndex: i,
+        } as Partial<LineupSong>);
+        await this.songsRepo.save(song as LineupSong);
+      }
+    }
+
+    // Build comprehensive change description
+    const newMembers = await this.membersRepo.find({
+      where: { lineup: { id } },
+      relations: ['user', 'instrumentRole'],
+    });
+    const changeParts: string[] = [];
+
+    // Service type change
+    if (oldServiceType !== dto.serviceType) {
+      changeParts.push(`Service type: ${this.formatServiceType(oldServiceType)} → ${this.formatServiceType(dto.serviceType)}`);
+    }
+
+    // Custom service name change
+    const newCustomName = dto.customServiceName || null;
+    if (oldCustomServiceName !== newCustomName && dto.serviceType === 'SPECIAL_EVENT') {
+      changeParts.push(`Event name: ${oldCustomServiceName || '(none)'} → ${newCustomName || '(none)'}`);
+    }
+
+    // Date changes
+    const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const oldDatesSorted = [...oldDates].sort();
+    const newDatesSorted = [...dto.dates].sort();
+    if (JSON.stringify(oldDatesSorted) !== JSON.stringify(newDatesSorted)) {
+      const addedDates = dto.dates.filter((d) => !oldDates.includes(d));
+      const removedDates = oldDates.filter((d) => !dto.dates.includes(d));
+      if (addedDates.length > 0) changeParts.push(`Dates added: ${addedDates.map(formatDate).join(', ')}`);
+      if (removedDates.length > 0) changeParts.push(`Dates removed: ${removedDates.map(formatDate).join(', ')}`);
+    }
+
+    // Notes change
+    const newNotes = dto.notes || null;
+    if ((oldNotes || null) !== newNotes) {
+      changeParts.push('Notes updated');
+    }
+
+    // Member changes
+    const oldMemberKeys = oldMembers.map((m) => m.user.id);
+    const newMemberKeys = newMembers.map((m) => m.user.id);
+    const addedMembers = newMembers.filter((m) => !oldMemberKeys.includes(m.user.id));
+    const removedMembers = oldMembers.filter((m) => !newMemberKeys.includes(m.user.id));
+    if (addedMembers.length > 0) {
+      changeParts.push('Members added: ' + addedMembers.map((m) => `${m.user.firstName} ${m.user.lastName} (${m.instrumentRole.name})`).join(', '));
+    }
+    if (removedMembers.length > 0) {
+      changeParts.push('Members removed: ' + removedMembers.map((m) => `${m.user.firstName} ${m.user.lastName} (${m.instrumentRole.name})`).join(', '));
+    }
+
+    // Song changes
+    const newSongs = (dto.songs || []).map((s) => s.title);
+    const oldSongTitles = oldSongs.map((s) => s.title);
+    const addedSongs = newSongs.filter((t) => !oldSongTitles.includes(t));
+    const removedSongs = oldSongTitles.filter((t) => !newSongs.includes(t));
+    if (addedSongs.length > 0) changeParts.push(`Songs added: ${addedSongs.join(', ')}`);
+    if (removedSongs.length > 0) changeParts.push(`Songs removed: ${removedSongs.join(', ')}`);
+
+    const changeComment = changeParts.length > 0 ? changeParts.join('. ') : 'Lineup updated';
+
+    // Add review entry
+    const review = this.reviewsRepo.create({
+      lineup,
+      reviewer: user,
+      status: LineupStatus.PENDING,
+      comment: changeComment,
+    });
+    await this.reviewsRepo.save(review);
+
+    // Notify all involved
+    if (this.notificationsService) {
+      try {
+        const allUsers = await this.usersService.findAll();
+        const approverIds = allUsers
+          .filter((u) =>
+            u.roles?.some((r) =>
+              [RoleName.WORSHIP_TEAM_HEAD, RoleName.ADMIN, RoleName.SUPER_ADMIN].includes(r.name as RoleName),
+            ) && u.id !== user.id,
+          )
+          .map((u) => u.id);
+        const memberIds = await this.getLineupMemberUserIds(id, user.id);
+        const allTargetIds = [...new Set([...approverIds, ...memberIds])];
+        if (allTargetIds.length > 0) {
+          const updatedLineup = await this.findOne(id);
+          await this.notificationsService.createForMultipleUsers(
+            allTargetIds,
+            NotificationType.LINEUP_SUBMITTED,
+            this.formatNotificationTitle(updatedLineup),
+            'Lineup updated - Pending for approval',
+            lineup.id,
+            'worship-lineup',
+          );
+        }
+
+        // Notify removed members
+        const newMemberUserIds = await this.getLineupMemberUserIds(id);
+        const removedUserIds = oldMemberUserIds.filter(
+          (uid) => !newMemberUserIds.includes(uid),
+        );
+        if (removedUserIds.length > 0) {
+          const updatedLineup2 = await this.findOne(id);
+          await this.notificationsService.createForMultipleUsers(
+            removedUserIds,
+            NotificationType.LINEUP_MEMBER_REMOVED,
+            this.formatNotificationTitle(updatedLineup2),
+            'You have been removed from this lineup',
             lineup.id,
             'worship-lineup',
           );

@@ -35,8 +35,8 @@ export class WorshipLineupsController {
   }
 
   @Get()
-  findAll() {
-    return this.worshipLineupsService.findAll();
+  findAll(@CurrentUser() user: User) {
+    return this.worshipLineupsService.findForUser(user.id);
   }
 
   @Get('instrument-roles')
@@ -103,7 +103,21 @@ export class WorshipLineupsController {
     @Body() dto: UpdateLineupStatusDto,
     @CurrentUser() user: User,
   ) {
-    return this.worshipLineupsService.updateStatus(id, dto.status, user);
+    return this.worshipLineupsService.updateStatus(id, dto.status, user, dto.comment);
+  }
+
+  @Patch(':id/resubmit')
+  resubmit(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.worshipLineupsService.resubmit(id, user);
+  }
+
+  @Patch(':id')
+  updateLineup(
+    @Param('id') id: string,
+    @Body() dto: CreateWorshipLineupDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.worshipLineupsService.update(id, dto, user);
   }
 
   @Patch(':id/request-changes')

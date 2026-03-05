@@ -211,7 +211,7 @@ export class UsersService {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException(`User with id ${userId} not found`);
 
-    user.profilePicture = file.path;
+    user.profilePicture = `profile-pictures/${file.filename}`;
     return this.usersRepo.save(user);
   }
 
