@@ -25,6 +25,10 @@ export class AuthService {
         passwordHash,
         firstName: dto.firstName,
         lastName: dto.lastName,
+        contactNumber: dto.contactNumber,
+        birthday: dto.birthday,
+        gender: dto.gender,
+        address: dto.address,
       });
       const { passwordHash: _, ...result } = user;
       return result;

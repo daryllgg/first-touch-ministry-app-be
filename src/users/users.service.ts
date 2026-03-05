@@ -232,14 +232,16 @@ export class UsersService {
         where: { id: saved.id },
         relations: ['roles'],
       });
-      for (const roleName of dto.roles) {
-        const role = await this.rolesRepo.findOne({ where: { name: roleName as RoleName } });
-        if (role) {
-          userWithRoles.roles.push(role);
+      if (userWithRoles) {
+        for (const roleName of dto.roles) {
+          const role = await this.rolesRepo.findOne({ where: { name: roleName as RoleName } });
+          if (role) {
+            userWithRoles.roles.push(role);
+          }
         }
+        await this.usersRepo.save(userWithRoles);
+        return userWithRoles;
       }
-      await this.usersRepo.save(userWithRoles);
-      return userWithRoles;
     }
 
     return saved;

@@ -21,8 +21,15 @@ export class PrayerRequest {
     type: 'enum',
     enum: PrayerRequestVisibility,
     default: PrayerRequestVisibility.PUBLIC,
+    nullable: true,
   })
-  visibility: PrayerRequestVisibility;
+  visibility?: PrayerRequestVisibility;
+
+  @Column({ default: false })
+  isApproved: boolean;
+
+  @Column({ nullable: true })
+  image: string;
 
   @ManyToOne(() => User, { eager: true })
   author: User;

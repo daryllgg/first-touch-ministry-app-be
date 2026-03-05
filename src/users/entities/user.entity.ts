@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Role } from './role.entity';
 import { Exclude } from 'class-transformer';
+import { Gender } from './gender.enum';
 
 @Entity('users')
 export class User {
@@ -33,6 +34,15 @@ export class User {
 
   @Column({ nullable: true })
   contactNumber: string;
+
+  @Column({ nullable: true })
+  birthday: string;
+
+  @Column({ type: 'enum', enum: Gender, nullable: true })
+  gender: Gender;
+
+  @Column({ nullable: true })
+  address: string;
 
   @Column({ default: false })
   isApproved: boolean;

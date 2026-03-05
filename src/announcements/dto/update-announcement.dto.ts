@@ -1,4 +1,5 @@
-import { IsString, MinLength, IsOptional } from 'class-validator';
+import { IsString, MinLength, IsOptional, IsEnum } from 'class-validator';
+import { AnnouncementAudience } from '../entities/announcement-audience.enum';
 
 export class UpdateAnnouncementDto {
   @IsOptional()
@@ -10,4 +11,8 @@ export class UpdateAnnouncementDto {
   @IsString()
   @MinLength(1)
   content?: string;
+
+  @IsOptional()
+  @IsEnum(AnnouncementAudience)
+  audience?: AnnouncementAudience;
 }

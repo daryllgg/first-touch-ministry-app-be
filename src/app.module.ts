@@ -5,7 +5,10 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { PrayerRequestsModule } from './prayer-requests/prayer-requests.module';
-import { WorshipSchedulesModule } from './worship-schedules/worship-schedules.module';
+import { WorshipLineupsModule } from './worship-lineups/worship-lineups.module';
+import { PushNotificationsModule } from './push-notifications/push-notifications.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { YouthProfilesModule } from './youth-profiles/youth-profiles.module';
 
 @Module({
   imports: [
@@ -28,7 +31,10 @@ import { WorshipSchedulesModule } from './worship-schedules/worship-schedules.mo
     AuthModule,
     AnnouncementsModule,
     PrayerRequestsModule,
-    WorshipSchedulesModule,
+    WorshipLineupsModule,
+    PushNotificationsModule,
+    NotificationsModule,
+    YouthProfilesModule,
   ],
 })
 export class AppModule {}

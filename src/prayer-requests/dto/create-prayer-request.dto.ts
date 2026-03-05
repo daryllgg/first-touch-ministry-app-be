@@ -6,6 +6,7 @@ export class CreatePrayerRequestDto {
   @MinLength(1)
   content: string;
 
+  /** @deprecated visibility is no longer actively used; kept for backward compat */
   @IsEnum(PrayerRequestVisibility)
   @IsOptional()
   visibility?: PrayerRequestVisibility;

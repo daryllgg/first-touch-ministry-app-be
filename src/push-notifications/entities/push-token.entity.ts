@@ -2,28 +2,25 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
+  ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
-@Entity('worship_schedules')
-export class WorshipSchedule {
+@Entity('push_tokens')
+export class PushToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  title: string;
-
-  @Column({ type: 'text', nullable: true })
-  description: string;
-
-  @Column({ type: 'timestamp' })
-  scheduledDate: Date;
-
   @ManyToOne(() => User, { eager: true })
-  createdBy: User;
+  user: User;
+
+  @Column()
+  token: string;
+
+  @Column()
+  platform: string;
 
   @CreateDateColumn()
   createdAt: Date;
