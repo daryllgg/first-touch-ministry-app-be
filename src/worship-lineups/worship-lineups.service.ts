@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleInit, Optional, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorshipLineup } from './entities/worship-lineup.entity';
@@ -18,7 +18,8 @@ import { NotificationType } from '../notifications/entities/notification-type.en
 import { RoleName } from '../users/entities/role.enum';
 
 @Injectable()
-export class WorshipLineupsService {
+export class WorshipLineupsService implements OnModuleInit {
+  private readonly logger = new Logger(WorshipLineupsService.name);
   constructor(
     @InjectRepository(WorshipLineup)
     private lineupsRepo: Repository<WorshipLineup>,
@@ -35,6 +36,29 @@ export class WorshipLineupsService {
     private usersService: UsersService,
     @Optional() private notificationsService?: NotificationsService,
   ) {}
+
+  private readonly defaultInstrumentRoles = [
+    { name: 'Singer', orderIndex: 0 },
+    { name: 'Drummer', orderIndex: 1 },
+    { name: 'Bassist', orderIndex: 2 },
+    { name: 'Acoustic Guitarist', orderIndex: 3 },
+    { name: 'Electric Guitarist', orderIndex: 4 },
+    { name: 'Rhythm Guitarist', orderIndex: 5 },
+    { name: 'Keyboardist', orderIndex: 6 },
+    { name: 'Sustain Piano', orderIndex: 7 },
+    { name: 'Others', orderIndex: 8 },
+  ];
+
+  async onModuleInit() {
+    const count = await this.instrumentRolesRepo.count();
+    if (count === 0) {
+      for (const role of this.defaultInstrumentRoles) {
+        const entity = this.instrumentRolesRepo.create({ ...role, isDefault: true });
+        await this.instrumentRolesRepo.save(entity);
+      }
+      this.logger.log('Seeded default instrument roles');
+    }
+  }
 
   async create(dto: CreateWorshipLineupDto, submittedBy: User): Promise<WorshipLineup> {
     const lineup = this.lineupsRepo.create({
