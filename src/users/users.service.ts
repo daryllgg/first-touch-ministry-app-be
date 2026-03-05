@@ -250,4 +250,12 @@ export class UsersService {
     if (!user) throw new NotFoundException(`User with id ${userId} not found`);
     await this.usersRepo.remove(user);
   }
+
+  async findByRoles(roleNames: string[]): Promise<User[]> {
+    return this.usersRepo.createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'role')
+      .where('role.name IN (:...roleNames)', { roleNames })
+      .andWhere('user.isApproved = :approved', { approved: true })
+      .getMany();
+  }
 }

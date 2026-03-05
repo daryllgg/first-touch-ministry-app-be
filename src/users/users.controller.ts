@@ -6,6 +6,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -102,6 +103,13 @@ export class UsersController {
   @Roles(RoleName.ADMIN, RoleName.SUPER_ADMIN)
   findPending() {
     return this.usersService.findPendingUsers();
+  }
+
+  @Get('by-roles')
+  @UseGuards(JwtAuthGuard, ApprovedGuard)
+  findByRoles(@Query('roles') roles: string) {
+    const roleNames = roles.split(',');
+    return this.usersService.findByRoles(roleNames);
   }
 
   @Patch(':id/approve')
