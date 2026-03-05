@@ -109,6 +109,37 @@ export class AnnouncementsService {
       }
     }
 
+    // Handle @mentions
+    if (dto.mentionedUserIds?.length && this.usersService) {
+      try {
+        const mentionedUsers: User[] = [];
+        for (const uid of dto.mentionedUserIds) {
+          const u = await this.usersService.findById(uid);
+          if (u) mentionedUsers.push(u);
+        }
+        saved.mentionedUsers = mentionedUsers;
+        await this.announcementsRepo.save(saved);
+
+        if (this.notificationsService && mentionedUsers.length > 0) {
+          const mentionUserIds = mentionedUsers
+            .filter((u) => u.id !== author.id)
+            .map((u) => u.id);
+          if (mentionUserIds.length > 0) {
+            await this.notificationsService.createForMultipleUsers(
+              mentionUserIds,
+              NotificationType.ANNOUNCEMENT,
+              'You were mentioned',
+              `${author.firstName} mentioned you in: ${saved.title}`,
+              saved.id,
+              'announcement',
+            );
+          }
+        }
+      } catch {
+        // Mention handling is best-effort
+      }
+    }
+
     return saved;
   }
 
