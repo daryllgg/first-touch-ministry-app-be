@@ -16,7 +16,7 @@ export class MailService {
         user: this.configService.get('MAIL_USER'),
         pass: this.configService.get('MAIL_PASS'),
       },
-    });
+    } as nodemailer.TransportOptions);
   }
 
   async sendOtp(email: string, otp: string): Promise<void> {
