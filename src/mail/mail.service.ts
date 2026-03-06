@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { resolve4 } from 'dns/promises';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter;
+  private transporterReady: Promise<void>;
 
   constructor(private configService: ConfigService) {
     const host = this.configService.get('MAIL_HOST');
@@ -14,19 +16,44 @@ export class MailService {
 
     this.logger.log(`Mail config: host=${host}, port=${port}, user=${user}`);
 
-    this.transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: false,
-      family: 4,
-      auth: {
-        user,
-        pass: this.configService.get('MAIL_PASS'),
-      },
-    } as nodemailer.TransportOptions);
+    // Nodemailer v8 ignores the `family` option and randomly picks between
+    // IPv4/IPv6 addresses. Render free tier doesn't support IPv6 outbound,
+    // so we resolve the hostname to IPv4 ourselves and pass the IP directly.
+    this.transporterReady = resolve4(host)
+      .then((addresses) => {
+        const ipv4 = addresses[0];
+        this.logger.log(`Resolved ${host} to IPv4: ${ipv4}`);
+        this.transporter = nodemailer.createTransport({
+          host: ipv4,
+          port,
+          secure: false,
+          auth: {
+            user,
+            pass: this.configService.get('MAIL_PASS'),
+          },
+          tls: {
+            servername: host,
+          },
+        } as nodemailer.TransportOptions);
+      })
+      .catch((err) => {
+        this.logger.error(`Failed to resolve ${host} to IPv4: ${err.message}`);
+        // Fallback: use hostname directly and hope for the best
+        this.transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure: false,
+          auth: {
+            user,
+            pass: this.configService.get('MAIL_PASS'),
+          },
+        } as nodemailer.TransportOptions);
+      });
   }
 
   async sendOtp(email: string, otp: string): Promise<void> {
+    await this.transporterReady;
+
     const from = this.configService.get(
       'MAIL_FROM',
       'First Touch Ministry <noreply@ftm.com>',
