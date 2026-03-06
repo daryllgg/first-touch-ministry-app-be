@@ -1,19 +1,25 @@
-import { IsString, MinLength, IsOptional, IsEnum, IsArray, IsUUID } from 'class-validator';
+import {
+  IsString,
+  MinLength,
+  IsOptional,
+  IsArray,
+  IsUUID,
+  IsIn,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
-import { AnnouncementAudience } from '../entities/announcement-audience.enum';
 
-export class CreateAnnouncementDto {
+export class CreateArticleDto {
   @IsString()
   @MinLength(1)
   title: string;
 
   @IsString()
   @MinLength(1)
-  content: string;
+  caption: string;
 
   @IsOptional()
-  @IsEnum(AnnouncementAudience)
-  audience?: AnnouncementAudience;
+  @IsIn(['DRAFT', 'PUBLISHED'])
+  status?: string;
 
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? JSON.parse(value) : value))

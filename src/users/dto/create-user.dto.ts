@@ -19,6 +19,26 @@ export class CreateUserDto {
   contactNumber?: string;
 
   @IsOptional()
+  @IsString()
+  middleName?: string;
+
+  @IsOptional()
+  @IsString()
+  invitedBy?: string;
+
+  @IsOptional()
+  @IsString()
+  facebookLink?: string;
+
+  @IsOptional()
+  @IsString()
+  firstDateAttendedChurch?: string;
+
+  @IsOptional()
+  @IsString()
+  dateBaptized?: string;
+
+  @IsOptional()
   @IsArray()
   roles?: string[];
 }

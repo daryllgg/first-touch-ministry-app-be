@@ -138,6 +138,11 @@ export class AuthService {
         birthday: dto.birthday,
         gender: dto.gender,
         address: dto.address,
+        middleName: dto.middleName,
+        invitedBy: dto.invitedBy,
+        facebookLink: dto.facebookLink,
+        firstDateAttendedChurch: dto.firstDateAttendedChurch,
+        dateBaptized: dto.dateBaptized,
       });
 
       // Cleanup OTP records

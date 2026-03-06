@@ -26,4 +26,24 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsString()
+  middleName?: string;
+
+  @IsOptional()
+  @IsString()
+  invitedBy?: string;
+
+  @IsOptional()
+  @IsString()
+  facebookLink?: string;
+
+  @IsOptional()
+  @IsString()
+  firstDateAttendedChurch?: string;
+
+  @IsOptional()
+  @IsString()
+  dateBaptized?: string;
 }

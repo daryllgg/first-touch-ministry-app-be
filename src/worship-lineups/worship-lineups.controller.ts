@@ -36,7 +36,12 @@ export class WorshipLineupsController {
 
   @Get()
   findAll(@CurrentUser() user: User) {
-    return this.worshipLineupsService.findForUser(user.id);
+    const isPrivileged = user.roles?.some(r =>
+      [RoleName.ADMIN, RoleName.SUPER_ADMIN, RoleName.WORSHIP_TEAM_HEAD].includes(r.name as RoleName)
+    );
+    return isPrivileged
+      ? this.worshipLineupsService.findAll()
+      : this.worshipLineupsService.findForUser(user.id);
   }
 
   @Get('instrument-roles')
@@ -88,6 +93,11 @@ export class WorshipLineupsController {
   @Get(':id/substitutions')
   findSubstitutionRequests(@Param('id') id: string) {
     return this.worshipLineupsService.findSubstitutionRequests(id);
+  }
+
+  @Delete(':id')
+  deleteLineup(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.worshipLineupsService.delete(id, user);
   }
 
   @Get(':id')

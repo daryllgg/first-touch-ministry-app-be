@@ -23,6 +23,7 @@ import { RoleName } from './entities/role.enum';
 import { AssignRoleDto } from './dto/assign-role.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { DeclineUserDto } from './dto/decline-user.dto';
 import { User } from './entities/user.entity';
 import { createMulterStorage, imageFileFilter } from '../common/multer-config';
 
@@ -105,6 +106,18 @@ export class UsersController {
     return this.usersService.findPendingUsers();
   }
 
+  @Get('declined')
+  @UseGuards(JwtAuthGuard, ApprovedGuard, RolesGuard)
+  @Roles(RoleName.ADMIN, RoleName.SUPER_ADMIN)
+  findDeclined() {
+    return this.usersService.findDeclinedUsers();
+  }
+
+  @Get('member-names')
+  getMemberNames() {
+    return this.usersService.getMemberNames();
+  }
+
   @Get('by-roles')
   @UseGuards(JwtAuthGuard, ApprovedGuard)
   findByRoles(@Query('roles') roles: string) {
@@ -119,12 +132,26 @@ export class UsersController {
     return this.usersService.approveUser(id);
   }
 
+  @Patch(':id/decline')
+  @UseGuards(JwtAuthGuard, ApprovedGuard, RolesGuard)
+  @Roles(RoleName.ADMIN, RoleName.SUPER_ADMIN)
+  decline(@Param('id') id: string, @Body() dto: DeclineUserDto) {
+    return this.usersService.declineUser(id, dto.reason);
+  }
+
   @Post(':id/roles')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard, ApprovedGuard, RolesGuard)
   @Roles(RoleName.ADMIN, RoleName.SUPER_ADMIN)
   assignRole(@Param('id') id: string, @Body() dto: AssignRoleDto) {
     return this.usersService.assignRole(id, dto.role);
+  }
+
+  @Delete(':id/roles/:role')
+  @UseGuards(JwtAuthGuard, ApprovedGuard, RolesGuard)
+  @Roles(RoleName.ADMIN, RoleName.SUPER_ADMIN)
+  removeRole(@Param('id') id: string, @Param('role') role: string) {
+    return this.usersService.removeRole(id, role as RoleName);
   }
 
   @Delete(':id')

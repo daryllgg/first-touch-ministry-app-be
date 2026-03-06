@@ -43,6 +43,14 @@ export class CreateWorshipLineupDto {
   @IsString()
   notes?: string;
 
+  @IsOptional()
+  @IsString()
+  rehearsalDate?: string;
+
+  @IsOptional()
+  @IsString()
+  overallTheme?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => LineupMemberDto)

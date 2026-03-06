@@ -37,6 +37,12 @@ export class WorshipLineup {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  @Column({ nullable: true })
+  rehearsalDate: string;
+
+  @Column({ type: 'text', nullable: true })
+  overallTheme: string;
+
   @ManyToOne(() => User, { nullable: true, eager: true })
   reviewedBy: User;
 

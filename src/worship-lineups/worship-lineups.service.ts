@@ -68,6 +68,8 @@ export class WorshipLineupsService implements OnModuleInit {
       customServiceName: dto.customServiceName,
       submittedBy,
       notes: dto.notes,
+      rehearsalDate: dto.rehearsalDate,
+      overallTheme: dto.overallTheme,
     });
     const savedLineup = await this.lineupsRepo.save(lineup);
 
@@ -172,7 +174,18 @@ export class WorshipLineupsService implements OnModuleInit {
   }
 
   async findAll(): Promise<WorshipLineup[]> {
-    return this.lineupsRepo.find({ order: { createdAt: 'DESC' } });
+    return this.lineupsRepo.createQueryBuilder('lineup')
+      .leftJoinAndSelect('lineup.submittedBy', 'submittedBy')
+      .leftJoinAndSelect('lineup.reviewedBy', 'reviewedBy')
+      .leftJoinAndSelect('lineup.members', 'members')
+      .leftJoinAndSelect('members.user', 'memberUser')
+      .leftJoinAndSelect('members.instrumentRole', 'instrumentRole')
+      .leftJoinAndSelect('lineup.songs', 'songs')
+      .leftJoinAndSelect('songs.singer', 'singer')
+      .leftJoinAndSelect('lineup.reviews', 'reviews')
+      .leftJoinAndSelect('reviews.reviewer', 'reviewer')
+      .orderBy('lineup.createdAt', 'DESC')
+      .getMany();
   }
 
   async findForUser(userId: string): Promise<WorshipLineup[]> {
@@ -350,12 +363,16 @@ export class WorshipLineupsService implements OnModuleInit {
     const oldServiceType = lineup.serviceType;
     const oldCustomServiceName = lineup.customServiceName;
     const oldNotes = lineup.notes;
+    const oldRehearsalDate = lineup.rehearsalDate;
+    const oldOverallTheme = lineup.overallTheme;
     const oldSongs = lineup.songs?.map((s) => ({ title: s.title, link: s.link || null, singerName: s.singer ? `${s.singer.firstName} ${s.singer.lastName}` : null })) || [];
 
     lineup.dates = dto.dates;
     lineup.serviceType = dto.serviceType;
     lineup.customServiceName = dto.customServiceName || (null as any);
     lineup.notes = dto.notes || (null as any);
+    lineup.rehearsalDate = dto.rehearsalDate || (null as any);
+    lineup.overallTheme = dto.overallTheme || (null as any);
     lineup.status = LineupStatus.PENDING;
     lineup.reviewedBy = null as any;
     lineup.reviewedAt = null as any;
@@ -427,6 +444,16 @@ export class WorshipLineupsService implements OnModuleInit {
     const newNotes = dto.notes || null;
     if ((oldNotes || null) !== newNotes) {
       changeParts.push('Notes updated');
+    }
+
+    // Rehearsal date change
+    if ((oldRehearsalDate || null) !== (dto.rehearsalDate || null)) {
+      changeParts.push(`Rehearsal date: ${oldRehearsalDate ? formatDate(oldRehearsalDate) : '(none)'} → ${dto.rehearsalDate ? formatDate(dto.rehearsalDate) : '(none)'}`);
+    }
+
+    // Overall theme change
+    if ((oldOverallTheme || null) !== (dto.overallTheme || null)) {
+      changeParts.push('Overall theme updated');
     }
 
     // Member changes
@@ -511,6 +538,66 @@ export class WorshipLineupsService implements OnModuleInit {
 
   async findInstrumentRoles(): Promise<InstrumentRole[]> {
     return this.instrumentRolesRepo.find({ order: { orderIndex: 'ASC' } });
+  }
+
+  async delete(id: string, user: User): Promise<void> {
+    const lineup = await this.lineupsRepo.findOne({ where: { id } });
+    if (!lineup) throw new NotFoundException('Worship lineup not found');
+    if (lineup.submittedBy.id !== user.id) {
+      throw new ForbiddenException('Only the submitter can delete this lineup');
+    }
+
+    // Determine if notifications should be sent
+    const shouldNotify = this.shouldNotifyOnDelete(lineup);
+
+    if (shouldNotify && this.notificationsService) {
+      try {
+        const memberIds = await this.getLineupMemberUserIds(id, user.id);
+        if (memberIds.length > 0) {
+          const title = this.formatNotificationTitle(lineup);
+          await this.notificationsService.createForMultipleUsers(
+            memberIds,
+            NotificationType.LINEUP_DELETED,
+            title,
+            `This worship lineup has been deleted by ${user.firstName} ${user.lastName}`,
+            id,
+            'worship-lineup',
+          );
+        }
+      } catch {
+        // best-effort
+      }
+    }
+
+    // Delete substitution requests for this lineup's members
+    const members = await this.membersRepo.find({ where: { lineup: { id } } });
+    for (const member of members) {
+      await this.substitutionsRepo.delete({ lineupMember: { id: member.id } });
+    }
+
+    // Delete lineup members
+    await this.membersRepo.delete({ lineup: { id } });
+
+    // Delete lineup (songs + reviews cascade)
+    await this.lineupsRepo.remove(lineup);
+  }
+
+  private shouldNotifyOnDelete(lineup: WorshipLineup): boolean {
+    // Do NOT notify if declined
+    if (lineup.status === LineupStatus.REJECTED) return false;
+
+    // Do NOT notify if approved AND all dates have passed
+    if (lineup.status === LineupStatus.APPROVED) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const allDatesPassed = lineup.dates.every(d => {
+        const date = new Date(d + 'T00:00:00');
+        return date < today;
+      });
+      if (allDatesPassed) return false;
+    }
+
+    return true;
   }
 
   async createInstrumentRole(name: string): Promise<InstrumentRole> {

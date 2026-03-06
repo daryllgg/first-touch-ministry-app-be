@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { Role } from '../users/entities/role.entity';
 import { RoleName } from '../users/entities/role.enum';
+import { AccountStatus } from '../users/entities/account-status.enum';
 import { config } from 'dotenv';
 import * as bcrypt from 'bcrypt';
 
@@ -34,7 +35,7 @@ async function seed() {
       passwordHash,
       firstName: 'Super',
       lastName: 'Admin',
-      isApproved: true,
+      accountStatus: AccountStatus.APPROVED,
       roles: [adminRole!, superAdminRole!],
     });
     await userRepo.save(admin);

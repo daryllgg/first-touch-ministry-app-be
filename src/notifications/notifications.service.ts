@@ -101,4 +101,18 @@ export class NotificationsService {
       { isRead: true },
     );
   }
+
+  async remove(id: string, userId: string): Promise<void> {
+    const notification = await this.notificationsRepo.findOne({
+      where: { id, user: { id: userId } },
+    });
+    if (!notification) {
+      throw new NotFoundException(`Notification with id ${id} not found`);
+    }
+    await this.notificationsRepo.remove(notification);
+  }
+
+  async removeAll(userId: string): Promise<void> {
+    await this.notificationsRepo.delete({ user: { id: userId } });
+  }
 }

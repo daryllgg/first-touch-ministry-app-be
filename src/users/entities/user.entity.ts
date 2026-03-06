@@ -10,6 +10,7 @@ import {
 import { Role } from './role.entity';
 import { Exclude } from 'class-transformer';
 import { Gender } from './gender.enum';
+import { AccountStatus } from './account-status.enum';
 
 @Entity('users')
 export class User {
@@ -44,8 +45,26 @@ export class User {
   @Column({ nullable: true })
   address: string;
 
-  @Column({ default: false })
-  isApproved: boolean;
+  @Column({ nullable: true })
+  middleName: string;
+
+  @Column({ nullable: true })
+  invitedBy: string;
+
+  @Column({ nullable: true })
+  facebookLink: string;
+
+  @Column({ nullable: true })
+  firstDateAttendedChurch: string;
+
+  @Column({ nullable: true })
+  dateBaptized: string;
+
+  @Column({ type: 'enum', enum: AccountStatus, default: AccountStatus.PENDING })
+  accountStatus: AccountStatus;
+
+  @Column({ nullable: true })
+  declineReason: string;
 
   @ManyToMany(() => Role, { eager: true })
   @JoinTable({ name: 'user_roles' })

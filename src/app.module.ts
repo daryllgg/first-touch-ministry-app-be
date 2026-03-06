@@ -9,6 +9,8 @@ import { WorshipLineupsModule } from './worship-lineups/worship-lineups.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { YouthProfilesModule } from './youth-profiles/youth-profiles.module';
+import { ArticlesModule } from './articles/articles.module';
+import { AttendanceModule } from './attendance/attendance.module';
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { YouthProfilesModule } from './youth-profiles/youth-profiles.module';
     PushNotificationsModule,
     NotificationsModule,
     YouthProfilesModule,
+    ArticlesModule,
+    AttendanceModule,
   ],
 })
 export class AppModule {}

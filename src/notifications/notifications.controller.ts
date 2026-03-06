@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Delete,
   Param,
   UseGuards,
 } from '@nestjs/common';
@@ -34,5 +35,15 @@ export class NotificationsController {
   @Patch('read-all')
   markAllAsRead(@CurrentUser() user: User) {
     return this.notificationsService.markAllAsRead(user.id);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.notificationsService.remove(id, user.id);
+  }
+
+  @Delete()
+  removeAll(@CurrentUser() user: User) {
+    return this.notificationsService.removeAll(user.id);
   }
 }
