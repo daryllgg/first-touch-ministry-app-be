@@ -1,67 +1,28 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
-import { resolve4 } from 'dns/promises';
+import { Resend } from 'resend';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private transporter: nodemailer.Transporter;
-  private transporterReady: Promise<void>;
+  private resend: Resend;
+  private fromAddress: string;
 
   constructor(private configService: ConfigService) {
-    const host = this.configService.get('MAIL_HOST');
-    const port = this.configService.get<number>('MAIL_PORT');
-    const user = this.configService.get('MAIL_USER');
+    const apiKey = this.configService.get('RESEND_API_KEY');
+    this.fromAddress = this.configService.get(
+      'MAIL_FROM',
+      'First Touch Ministry <onboarding@resend.dev>',
+    );
 
-    this.logger.log(`Mail config: host=${host}, port=${port}, user=${user}`);
-
-    // Nodemailer v8 ignores the `family` option and randomly picks between
-    // IPv4/IPv6 addresses. Render free tier doesn't support IPv6 outbound,
-    // so we resolve the hostname to IPv4 ourselves and pass the IP directly.
-    this.transporterReady = resolve4(host)
-      .then((addresses) => {
-        const ipv4 = addresses[0];
-        this.logger.log(`Resolved ${host} to IPv4: ${ipv4}`);
-        this.transporter = nodemailer.createTransport({
-          host: ipv4,
-          port,
-          secure: false,
-          auth: {
-            user,
-            pass: this.configService.get('MAIL_PASS'),
-          },
-          tls: {
-            servername: host,
-          },
-        } as nodemailer.TransportOptions);
-      })
-      .catch((err) => {
-        this.logger.error(`Failed to resolve ${host} to IPv4: ${err.message}`);
-        // Fallback: use hostname directly and hope for the best
-        this.transporter = nodemailer.createTransport({
-          host,
-          port,
-          secure: false,
-          auth: {
-            user,
-            pass: this.configService.get('MAIL_PASS'),
-          },
-        } as nodemailer.TransportOptions);
-      });
+    this.logger.log(`Mail config: using Resend, from=${this.fromAddress}`);
+    this.resend = new Resend(apiKey);
   }
 
   async sendOtp(email: string, otp: string): Promise<void> {
-    await this.transporterReady;
-
-    const from = this.configService.get(
-      'MAIL_FROM',
-      'First Touch Ministry <noreply@ftm.com>',
-    );
-
     try {
-      const result = await this.transporter.sendMail({
-        from,
+      const { data, error } = await this.resend.emails.send({
+        from: this.fromAddress,
         to: email,
         subject: 'Your Verification Code - First Touch Ministry',
         html: `
@@ -75,7 +36,13 @@ export class MailService {
           </div>
         `,
       });
-      this.logger.log(`OTP email sent to ${email}, messageId: ${result.messageId}`);
+
+      if (error) {
+        this.logger.error(`Resend API error for ${email}: ${JSON.stringify(error)}`);
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`OTP email sent to ${email}, id: ${data?.id}`);
     } catch (error) {
       this.logger.error(`Failed to send OTP email to ${email}: ${error.message}`, error.stack);
       throw error;
