@@ -3,6 +3,8 @@ import {
   ConflictException,
   UnauthorizedException,
   BadRequestException,
+  InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -18,6 +20,8 @@ import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -70,7 +74,16 @@ export class AuthService {
       expiresAt,
     });
 
-    await this.mailService.sendOtp(dto.email, otp);
+    try {
+      await this.mailService.sendOtp(dto.email, otp);
+    } catch (error) {
+      this.logger.error(`Failed to send OTP: ${error.message}`);
+      // Clean up the OTP record since email failed
+      await this.emailOtpRepository.delete({ email: dto.email });
+      throw new InternalServerErrorException(
+        'Failed to send verification email. Please try again later.',
+      );
+    }
 
     return { message: 'OTP sent' };
   }
