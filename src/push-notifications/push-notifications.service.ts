@@ -26,9 +26,10 @@ export class PushNotificationsService {
           credential: admin.credential.cert({
             projectId: this.configService.get('FIREBASE_PROJECT_ID'),
             clientEmail: this.configService.get('FIREBASE_CLIENT_EMAIL'),
-            privateKey: this.configService
-              .get<string>('FIREBASE_PRIVATE_KEY')
-              ?.replace(/\\n/g, '\n'),
+            privateKey: Buffer.from(
+              this.configService.get<string>('FIREBASE_PRIVATE_KEY') || '',
+              'base64',
+            ).toString('utf8'),
           }),
         });
       } catch (e) {
