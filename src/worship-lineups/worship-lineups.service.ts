@@ -552,8 +552,7 @@ export class WorshipLineupsService implements OnModuleInit {
   }
 
   async delete(id: string, user: User): Promise<void> {
-    const lineup = await this.lineupsRepo.findOne({ where: { id } });
-    if (!lineup) throw new NotFoundException('Worship lineup not found');
+    const lineup = await this.findOne(id);
     if (lineup.submittedBy.id !== user.id) {
       throw new ForbiddenException('Only the submitter can delete this lineup');
     }
@@ -626,7 +625,12 @@ export class WorshipLineupsService implements OnModuleInit {
     dto: CreateSubstitutionRequestDto,
     requestedBy: User,
   ): Promise<SubstitutionRequest> {
-    const lineupMember = await this.membersRepo.findOne({ where: { id: dto.lineupMemberId } });
+    const lineupMember = await this.membersRepo.createQueryBuilder('m')
+      .leftJoinAndSelect('m.user', 'user')
+      .leftJoinAndSelect('m.instrumentRole', 'instrumentRole')
+      .leftJoinAndSelect('m.lineup', 'lineup')
+      .where('m.id = :id', { id: dto.lineupMemberId })
+      .getOne();
     if (!lineupMember) throw new NotFoundException('Lineup member not found');
 
     let substituteUser: User | null = null;
@@ -677,7 +681,12 @@ export class WorshipLineupsService implements OnModuleInit {
     status: SubstitutionStatus,
     respondedBy: User,
   ): Promise<SubstitutionRequest> {
-    const request = await this.substitutionsRepo.findOne({ where: { id } });
+    const request = await this.substitutionsRepo.createQueryBuilder('s')
+      .leftJoinAndSelect('s.lineupMember', 'lineupMember')
+      .leftJoinAndSelect('s.requestedBy', 'requestedBy')
+      .leftJoinAndSelect('s.respondedBy', 'respondedByUser')
+      .where('s.id = :id', { id })
+      .getOne();
     if (!request) throw new NotFoundException('Substitution request not found');
     request.status = status;
     request.respondedBy = respondedBy;
@@ -715,7 +724,12 @@ export class WorshipLineupsService implements OnModuleInit {
   }
 
   async acceptSubstitution(substitutionId: string, user: User): Promise<SubstitutionRequest> {
-    const request = await this.substitutionsRepo.findOne({ where: { id: substitutionId } });
+    const request = await this.substitutionsRepo.createQueryBuilder('s')
+      .leftJoinAndSelect('s.lineupMember', 'lineupMember')
+      .leftJoinAndSelect('s.requestedBy', 'requestedBy')
+      .leftJoinAndSelect('s.respondedBy', 'respondedByUser')
+      .where('s.id = :id', { id: substitutionId })
+      .getOne();
     if (!request) throw new NotFoundException('Substitution request not found');
     request.status = SubstitutionStatus.ACCEPTED;
     request.substituteUser = user;

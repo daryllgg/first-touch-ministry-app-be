@@ -77,17 +77,20 @@ export class NotificationsService {
   }
 
   async findByUser(userId: string): Promise<Notification[]> {
-    return this.notificationsRepo.find({
-      where: { user: { id: userId } },
-      order: { createdAt: 'DESC' },
-    });
+    return this.notificationsRepo
+      .createQueryBuilder('n')
+      .where('n.userId = :userId', { userId })
+      .orderBy('n.createdAt', 'DESC')
+      .getMany();
   }
 
   async findUnreadByUser(userId: string): Promise<Notification[]> {
-    return this.notificationsRepo.find({
-      where: { user: { id: userId }, isRead: false },
-      order: { createdAt: 'DESC' },
-    });
+    return this.notificationsRepo
+      .createQueryBuilder('n')
+      .where('n.userId = :userId', { userId })
+      .andWhere('n.isRead = false')
+      .orderBy('n.createdAt', 'DESC')
+      .getMany();
   }
 
   async countUnread(userId: string): Promise<number> {
@@ -99,9 +102,11 @@ export class NotificationsService {
   }
 
   async markAsRead(id: string, userId: string): Promise<Notification> {
-    const notification = await this.notificationsRepo.findOne({
-      where: { id, user: { id: userId } },
-    });
+    const notification = await this.notificationsRepo
+      .createQueryBuilder('n')
+      .where('n.id = :id', { id })
+      .andWhere('n.userId = :userId', { userId })
+      .getOne();
     if (!notification) {
       throw new NotFoundException(`Notification with id ${id} not found`);
     }
@@ -117,9 +122,11 @@ export class NotificationsService {
   }
 
   async remove(id: string, userId: string): Promise<void> {
-    const notification = await this.notificationsRepo.findOne({
-      where: { id, user: { id: userId } },
-    });
+    const notification = await this.notificationsRepo
+      .createQueryBuilder('n')
+      .where('n.id = :id', { id })
+      .andWhere('n.userId = :userId', { userId })
+      .getOne();
     if (!notification) {
       throw new NotFoundException(`Notification with id ${id} not found`);
     }
