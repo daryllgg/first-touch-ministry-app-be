@@ -4,12 +4,14 @@ import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { NotificationType } from './entities/notification-type.enum';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 
 @Injectable()
 export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private notificationsRepo: Repository<Notification>,
+    private pushNotificationsService: PushNotificationsService,
   ) {}
 
   async create(dto: CreateNotificationDto): Promise<Notification> {
@@ -40,7 +42,12 @@ export class NotificationsService {
       relatedEntityId,
       relatedEntityType,
     });
-    return this.notificationsRepo.save(notification);
+    const saved = await this.notificationsRepo.save(notification);
+    this.pushNotificationsService.sendToUser(userId, title, message, {
+      ...(relatedEntityId ? { relatedEntityId } : {}),
+      ...(relatedEntityType ? { relatedEntityType } : {}),
+    }).catch(() => {});
+    return saved;
   }
 
   async createForMultipleUsers(
@@ -61,7 +68,12 @@ export class NotificationsService {
         relatedEntityType,
       }),
     );
-    return this.notificationsRepo.save(notifications);
+    const saved = await this.notificationsRepo.save(notifications);
+    this.pushNotificationsService.sendToMultipleUsers(userIds, title, message, {
+      ...(relatedEntityId ? { relatedEntityId } : {}),
+      ...(relatedEntityType ? { relatedEntityType } : {}),
+    }).catch(() => {});
+    return saved;
   }
 
   async findByUser(userId: string): Promise<Notification[]> {
