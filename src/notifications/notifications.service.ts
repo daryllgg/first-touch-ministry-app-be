@@ -91,9 +91,11 @@ export class NotificationsService {
   }
 
   async countUnread(userId: string): Promise<number> {
-    return this.notificationsRepo.count({
-      where: { user: { id: userId }, isRead: false },
-    });
+    return this.notificationsRepo
+      .createQueryBuilder('n')
+      .where('n.userId = :userId', { userId })
+      .andWhere('n.isRead = false')
+      .getCount();
   }
 
   async markAsRead(id: string, userId: string): Promise<Notification> {

@@ -206,7 +206,18 @@ export class WorshipLineupsService implements OnModuleInit {
   }
 
   async findOne(id: string): Promise<WorshipLineup> {
-    const lineup = await this.lineupsRepo.findOne({ where: { id } });
+    const lineup = await this.lineupsRepo.createQueryBuilder('lineup')
+      .leftJoinAndSelect('lineup.submittedBy', 'submittedBy')
+      .leftJoinAndSelect('lineup.reviewedBy', 'reviewedBy')
+      .leftJoinAndSelect('lineup.members', 'members')
+      .leftJoinAndSelect('members.user', 'memberUser')
+      .leftJoinAndSelect('members.instrumentRole', 'instrumentRole')
+      .leftJoinAndSelect('lineup.songs', 'songs')
+      .leftJoinAndSelect('songs.singer', 'singer')
+      .leftJoinAndSelect('lineup.reviews', 'reviews')
+      .leftJoinAndSelect('reviews.reviewer', 'reviewer')
+      .where('lineup.id = :id', { id })
+      .getOne();
     if (!lineup) throw new NotFoundException('Worship lineup not found');
     return lineup;
   }
