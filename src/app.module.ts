@@ -31,6 +31,8 @@ import { PledgesModule } from './pledges/pledges.module';
         ssl: configService.get('DB_SSL') === 'true'
           ? { rejectUnauthorized: false }
           : false,
+        retryAttempts: 5,
+        retryDelay: 3000,
       }),
     }),
     UsersModule,
