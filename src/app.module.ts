@@ -12,6 +12,7 @@ import { YouthProfilesModule } from './youth-profiles/youth-profiles.module';
 import { ArticlesModule } from './articles/articles.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { PledgesModule } from './pledges/pledges.module';
+import { WebhookModule } from './webhook/webhook.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { PledgesModule } from './pledges/pledges.module';
     ArticlesModule,
     AttendanceModule,
     PledgesModule,
+    WebhookModule,
   ],
 })
 export class AppModule {}
