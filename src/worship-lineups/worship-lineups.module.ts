@@ -10,6 +10,7 @@ import { WorshipLineupsService } from './worship-lineups.service';
 import { WorshipLineupsController } from './worship-lineups.controller';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { WebhookModule } from '../webhook/webhook.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ]),
     UsersModule,
     forwardRef(() => NotificationsModule),
+    WebhookModule,
   ],
   providers: [WorshipLineupsService],
   controllers: [WorshipLineupsController],

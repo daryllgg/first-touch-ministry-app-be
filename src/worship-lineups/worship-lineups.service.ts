@@ -17,6 +17,7 @@ import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification-type.enum';
 import { RoleName } from '../users/entities/role.enum';
+import { WebhookService } from '../webhook/webhook.service';
 
 @Injectable()
 export class WorshipLineupsService implements OnModuleInit {
@@ -35,6 +36,7 @@ export class WorshipLineupsService implements OnModuleInit {
     @InjectRepository(SubstitutionRequest)
     private substitutionsRepo: Repository<SubstitutionRequest>,
     private usersService: UsersService,
+    private webhookService: WebhookService,
     @Optional() private notificationsService?: NotificationsService,
   ) {}
 
@@ -265,7 +267,9 @@ export class WorshipLineupsService implements OnModuleInit {
       }
     }
 
-    return this.findOne(id);
+    const finalLineup = await this.findOne(id);
+    await this.webhookService.notifyLineupStatus(finalLineup);
+    return finalLineup;
   }
 
   async requestChanges(id: string, comment: string, reviewer: User): Promise<WorshipLineup> {
@@ -306,7 +310,9 @@ export class WorshipLineupsService implements OnModuleInit {
       }
     }
 
-    return this.findOne(id);
+    const finalLineup = await this.findOne(id);
+    await this.webhookService.notifyLineupStatus(finalLineup);
+    return finalLineup;
   }
 
   async resubmit(id: string, user: User): Promise<WorshipLineup> {
@@ -692,6 +698,26 @@ export class WorshipLineupsService implements OnModuleInit {
     request.respondedBy = respondedBy;
     request.respondedAt = new Date();
     const savedRequest = await this.substitutionsRepo.save(request);
+
+    // Notify chords-app about substitution
+    if (status === SubstitutionStatus.APPROVED || status === SubstitutionStatus.ACCEPTED) {
+      try {
+        const lineupMemberFull = await this.membersRepo.createQueryBuilder('m')
+          .leftJoinAndSelect('m.user', 'user')
+          .leftJoinAndSelect('m.instrumentRole', 'instrumentRole')
+          .leftJoinAndSelect('m.lineup', 'lineup')
+          .where('m.id = :id', { id: request.lineupMember.id })
+          .getOne();
+        if (lineupMemberFull && request.substituteUser) {
+          const lineup = await this.findOne(lineupMemberFull.lineup.id);
+          await this.webhookService.notifySubstitution(
+            lineup, lineupMemberFull, request.substituteUser, request.reason, status
+          );
+        }
+      } catch {
+        // best-effort webhook
+      }
+    }
 
     // Notify requester about substitution status
     if (this.notificationsService && request.requestedBy) {
